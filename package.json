@@ -1,0 +1,29 @@
+{
+  "name": "dht-stream",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "lezo",
+  "license": "ISC",
+  "dependencies": {
+    "create-torrent": "^3.31.0",
+    "drag-drop": "^4.1.0",
+    "http": "0.0.0",
+    "moment": "^2.22.1",
+    "prettier-bytes": "^1.0.4",
+    "throttleit": "^1.0.0",
+    "thunky": "^1.0.2",
+    "webtorrent": "^0.99.4",
+    "webtorrent-hybrid": "^1.0.6"
+  },
+  "devDependencies": {
+    "browserify": "^16.2.2",
+    "gulp": "^3.9.1",
+    "gulp-streamify": "^1.0.2",
+    "gulp-uglify-es": "^1.0.4",
+    "vinyl-source-stream": "^2.0.0"
+  }
+}

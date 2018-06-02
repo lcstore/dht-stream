@@ -1,0 +1,1 @@
+browserify -g uglifyify ./index.js > bundle.js
