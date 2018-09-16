@@ -1,112 +1,147 @@
 var moment = require('moment')
-var client = require('./../lib/client')
 var util = require('./../lib/utils')
 var prettierBytes = require('prettier-bytes')
-// HTML elements
-var $body = document.querySelector('#post-video')
-var $progressBar = document.querySelector('.progressBar')
-var $numPeers = document.querySelector('#numPeers')
-var $downloaded = document.querySelector('#downloaded')
-var $total = document.querySelector('#total')
-var $remaining = document.querySelector('#remaining')
-// var $uploadSpeed = document.querySelector('#uploadSpeed')
-var $downloadSpeed = document.querySelector('#downloadSpeed')
-var $link = document.querySelector('#link')
-var $loading = document.querySelector('#loading')
+const ipcRenderer = require('./../render/ipc-renderer')
+const events = require('./events')
+
+var $postVideo = document.querySelector('#post-video')
+if ($postVideo) {
+    $postVideo.addEventListener("click", function() {
+        var cdnEle = document.querySelector('meta[name="_cdn_host"]')
+        var $link = document.querySelector('#link')
+        var $videoList = document.querySelectorAll('#post-video')
+        Array.from($videoList).reverse().forEach(function(elem, eindex) {
+            var $videoBox = elem.querySelector('.video')
+            var $video = document.createElement('video')
+            $videoBox.appendChild($video)
+            var dataURL = $link.value.trim();
 
 
-registerADD('#post-video')
-
-function registerADD(selector) {
-    var $browse = document.querySelector(selector)
-    if (!$browse) {
-        return
-    }
-    $browse.addEventListener("click", function() {
-        // var magnetURI = 'magnet:?xt=urn:btih:08ada5a7a6183aae1e09d831df6748d566095a10&dn=Sintel&tr=udp%3A%2F%2Fexplodie.org%3A6969&tr=udp%3A%2F%2Ftracker.coppersurfer.tk%3A6969&tr=udp%3A%2F%2Ftracker.empire-js.us%3A1337&tr=udp%3A%2F%2Ftracker.leechers-paradise.org%3A6969&tr=udp%3A%2F%2Ftracker.opentrackr.org%3A1337&tr=wss%3A%2F%2Ftracker.btorrent.xyz&tr=wss%3A%2F%2Ftracker.fastcast.nz&tr=wss%3A%2F%2Ftracker.openwebtorrent.com&ws=https%3A%2F%2Fwebtorrent.io%2Ftorrents%2F'
-        var magnetURI = $link.value.trim();
-        if (!(/^magnet:/i.test(magnetURI))) {
-            magnetURI = 'magnet:?xt=urn:btih:' + magnetURI
-        }
-        magnetURI = magnetURI + '&tr=wss%3A%2F%2Ftracker.btorrent.xyz&tr=wss%3A%2F%2Ftracker.fastcast.nz&tr=ws%3A%2F%2Ftracker.btsync.cf%3A2710%2Fannounce&tr=wss%3A%2F%2Ftracker.openwebtorrent.com'
-        console.log('magnetURI:', magnetURI)
-        var opts = {
-            announce: ['ws://tracker.btsync.cf:2710/announce'],
-            maxPeers: 5
-        }
-        client.extractTo(magnetURI, opts, onADDTorrent)
+            // util.info('magnetURI:' + magnetURI + ',infoHash:' + infoHash)
+            $video.style.display = 'none'
+            $video.setAttribute('autoplay', true)
+            addEvents($video, document, dataURL)
+            // $video.play()
+            events.addDevice($video)
+            
+            var infoHash = $video.getAttribute('data-infohash')
+            if (infoHash) {
+                ipcRenderer.on('wt-ready-' + infoHash, (err, torrentKey, info) => {
+                    ipcRenderer.send('dispatch', 'playFile', info.infoHash)
+                })
+            }
+        })
     });
 }
 
-function onADDTorrent(torrent, error) {
-    if (error) {
-        $loading.style = 'display: none;'
-        return
-    }
-    // Got torrent metadata!
-    console.log('Client is downloading:', torrent.infoHash)
-    // Torrents can contain many files. Let's use the .mp4 file
-    var acceptFiles = torrent.files.filter(function(file) {
-        var bAccept = /(mp4|rmvb|mkv|avi)$/gi.test(file.name)
-        if (!bAccept) {
-            file.deselect()
-        }
-        return bAccept
-    })
-    var opts = {
-        autoplay: true,
-        controls: true,
-        muted: false, // 不减音量
-        maxBlobLength: 2 * 1000 * 1000 * 1000 // 2 GB, default=200M
-    }
-    acceptFiles.sort(function(lfile, rfile) {
-        return rfile.name - lfile.name
-    })
-    var acceptFile = acceptFiles[0]
-    console.log('Client is files:', acceptFile.name)
-    acceptFile.appendTo('#post-video .video', opts, function(err, elem) {
-        if (err) return util.error(err)
-        // elem.parentElement.classList.add('canplay')
-        // elem.parentElement.classList.add('muted')
-        // elem.muted = false
-    })
-    torrent.on('done', onDone)
-    var progressTrigger = setInterval(onProgress, 500)
-    onProgress()
+function addEvents($video, $elem, infoHash) {
+    var $play = $elem.querySelector('#post-video')
+    var $videoCover = $elem.querySelector('.video-cover-detail');
 
-    // Statistics
-    function onProgress() {
-        // Peers
-        // $numPeers.innerHTML = torrent.numPeers + (torrent.numPeers === 1 ? ' peer' : ' peers')
-        if (torrent.downloaded > 0) {
-            $loading.style.display = 'none'
-        }
-        // Progress
-        var percent = Math.round(torrent.progress * 100 * 100) / 100
-        $progressBar.style.width = percent + '%'
-        $downloaded.innerHTML = prettierBytes(torrent.downloaded)
-        $total.innerHTML = prettierBytes(torrent.length)
 
-        // Remaining time
-        var remaining
-        if (torrent.done) {
-            remaining = '已完成'
-            $downloadSpeed.innerHTML = '-'
-        } else {
-            remaining = moment.duration(torrent.timeRemaining / 1000, 'seconds').as('minutes')
-            if ('Infinity' != remaining && !isNaN(remaining)) {
-                remaining = remaining.toFixed(2) + "分"
+    var $progressBar = document.querySelector('.progressBar')
+    var $numPeers = document.querySelector('#numPeers')
+    var $downloaded = document.querySelector('#downloaded')
+    var $total = document.querySelector('#total')
+    var $remaining = document.querySelector('#remaining')
+    // var $uploadSpeed = document.querySelector('#uploadSpeed')
+    var $downloadSpeed = document.querySelector('#downloadSpeed')
+
+    // var $loading = document.querySelector('#loading')
+
+
+    $play.addEventListener("click", function() {
+        $video.play()
+        if ($video.readyState < 3) {
+            ipcRenderer.send('dispatch', 'prioritizeTorrent', infoHash)
+        }
+    });
+
+    $video.addEventListener("pause", () => {
+        console.log("pause..........");
+    })
+
+    $video.addEventListener("play", () => {
+        $videoCover.style.display = 'none'
+        $video.style.display = 'block'
+        var pevent = document.createEvent('HTMLEvents');
+        // 事件类型，是否冒泡，是否阻止浏览器的默认行为  
+        pevent.initEvent("progress", false, false);
+        pevent.eventType = 'message';
+        $video.dispatchEvent(pevent);
+
+
+    })
+    // $video.addEventListener("loadeddata", () => {
+    //     console.log("onloadeddata..........");
+    // })
+    // $video.addEventListener("loadedmetadata", () => {
+    //     console.log("onloadedmetadata..........");
+    // })
+    // $video.addEventListener("loadstart", () => {
+    //     console.log("onloadstart..........");
+    // })
+    $video.addEventListener("ended", () => {
+        $videoCover.style.display = 'block'
+        // $video.style.display = 'none'
+    })
+    $video.addEventListener("progress", () => {
+        // 0 = HAVE_NOTHING - 没有关于音频/视频是否就绪的信息
+        // 1 = HAVE_METADATA - 关于音频/视频就绪的元数据
+        // 2 = HAVE_CURRENT_DATA - 关于当前播放位置的数据是可用的，但没有足够的数据来播放下一帧/毫秒
+        // 3 = HAVE_FUTURE_DATA - 当前及至少下一帧的数据是可用的
+        // 4 = HAVE_ENOUGH_DATA - 可用数据足以开始播放
+        if (!$video.paused) {
+            if ($video.readyState === 0) {
+                // $loading.style.display = 'block'
+                $video.style.display = 'none'
             } else {
-                remaining = '省余时间'
+                // $loading.style.display = 'none'
+                $video.style.display = 'block'
+
             }
-            $downloadSpeed.innerHTML = prettierBytes(torrent.downloadSpeed) + '/S'
         }
-        $remaining.innerHTML = remaining
-    }
+    })
+    $video.addEventListener("canplaythrough", () => {
+        // console.log("canplaythrough..........");
+    })
 
-    function onDone() {
-        onProgress()
-        clearInterval(progressTrigger)
-    }
+    ipcRenderer.on('wt-progress', (err, progress) => {
+        const torrentKey = $video.getAttribute('torrentkey')
+        if (!progress || !progress.torrents || torrentKey == undefined || torrentKey == null) {
+            return
+        }
+        const tprocess = progress.torrents.find((tprocess) => {
+            return tprocess.torrentKey == torrentKey
+        })
+        if (tprocess) {
+            var percent = Math.round(tprocess.downloaded / tprocess.length * 100 * 100) / 100
+            $progressBar.style.width = percent + '%'
+            $downloaded.innerHTML = prettierBytes(tprocess.downloaded)
+            $total.innerHTML = prettierBytes(tprocess.length)
 
+            // Remaining time
+            var remaining
+            if (tprocess.progress == 1) {
+                remaining = '已完成'
+                $downloadSpeed.innerHTML = '-'
+            } else {
+                if (tprocess.downloadSpeed != 0 && tprocess.length > 0) {
+                    var timeRemaining = (tprocess.length - tprocess.downloaded) / tprocess.downloadSpeed
+                    remaining = moment.duration(timeRemaining, 'seconds').as('minutes')
+                    remaining = remaining.toFixed(2) + "分"
+                } else {
+                    remaining = '省余时间'
+                }
+                $downloadSpeed.innerHTML = prettierBytes(tprocess.downloadSpeed) + '/S'
+            }
+            $remaining.innerHTML = remaining
+
+            if (percent >= 10 && !$video.paused && $video.readyState == 1) {
+                $video.readyState = 3
+                $video.pause()
+                $video.play()
+            }
+        }
+    })
 }
